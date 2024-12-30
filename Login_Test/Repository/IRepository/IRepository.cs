@@ -14,4 +14,4 @@ namespace Login_Test.Repository.IRepository
         void RemoveRange(IEnumerable<T> entity);
     }
 }
-}
+
