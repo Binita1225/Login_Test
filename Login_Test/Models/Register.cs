@@ -12,12 +12,12 @@ namespace Login_Test.Models
         [Required]
         public string LastName { get; set; }
         [Required]
-        public string UserName { get; set; }
+        public string Address { get; set; }
         [Required]
         [EmailAddress(ErrorMessage = "Invalid email address")]
         public string Email { get; set; }
         [Required]
-        [PasswordPropertyText]
-        public string Password { get; set; }
+        [RegularExpression(@"^\d{10}$", ErrorMessage = "Phone number must be exactly 10 digits")]
+        public int PhoneNumber { get; set; }
     }
 }

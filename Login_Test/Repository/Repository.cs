@@ -6,9 +6,7 @@ using System.Linq;
 
 namespace Login_Test.Repository
 {
-    public class Repository
-    {
-    }
+   
     public class Repository<T> : IRepository<T> where T : class
     {
 

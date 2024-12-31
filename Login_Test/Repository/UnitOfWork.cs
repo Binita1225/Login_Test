@@ -7,9 +7,14 @@ namespace Login_Test.Repository
     {
         private ApplicationDbContext _db;
 
+        public IRegisterRepository Register { get; private set; }
+        public IUserRepository User { get; private set; }
+
         public UnitOfWork(ApplicationDbContext db) 
         {
             _db = db;
+            Register = new RegisterRepository(_db);
+            User = new UserRepository(_db);
         }
         public void Save()
         {
