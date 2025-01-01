@@ -23,6 +23,8 @@ namespace Login_Test.Controllers
 
             public IActionResult Index()
         {
+            var username = HttpContext.Session.GetString("Username");
+          
             return View();
         }
 
@@ -34,52 +36,68 @@ namespace Login_Test.Controllers
         [HttpPost]
         public IActionResult Register(RegisterVM model)
         {
+
+
             if (ModelState.IsValid)
             {
-                var existingUser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
-                if (existingUser != null)
+                using var transaction = (_db.Database.BeginTransaction());
+
+                try
                 {
-                    ModelState.AddModelError("Username", "Username is already taken");
-                    return View(model);
+
+                    var existingUser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
+                    if (existingUser != null)
+                    {
+                        ModelState.AddModelError("Username", "Username is already taken");
+                        return View(model);
+                    }
+
+
+                    string password = model.Password;
+
+                    byte[] saltBytes = GenerateSalt();
+                    // Hash the password with the salt
+                    string hashedPassword = HashPassword(password, saltBytes);
+                    string base64Salt = Convert.ToBase64String(saltBytes);
+
+                    //string retrievedSaltBytes = base64Salt;
+                    byte[] retrievedSaltBytes = Convert.FromBase64String(base64Salt);
+
+                    var registration = new Register()
+                    {
+                        FirstName = model.FirstName,
+                        LastName = model.LastName,
+                        Address = model.Address,
+                        Email = model.Email,
+
+                        PhoneNumber = model.PhoneNumber
+                    };
+
+                    var result = _db.Registers.Add(registration);
+                    _db.SaveChanges();
+                    var loginUser = new User()
+                    {
+                        UserName = model.UserName,
+                        Password = hashedPassword,
+                        UserId = registration.Id,
+                        Salt = retrievedSaltBytes
+                    };
+
+
+                    _db.Users.Add(loginUser);
+                    _db.SaveChanges();
+
+                    transaction.Commit();
+
+                    return RedirectToAction("Login");
                 }
-            }
-
-            string password = model.Password;
-
-            byte[] saltBytes = GenerateSalt();
-            // Hash the password with the salt
-            string hashedPassword = HashPassword(password, saltBytes);
-            string base64Salt = Convert.ToBase64String(saltBytes);
-
-            //string retrievedSaltBytes = base64Salt;
-            byte[] retrievedSaltBytes = Convert.FromBase64String(base64Salt);
-
-            var registration = new Register()
-            {
-                FirstName = model.FirstName,
-                LastName = model.LastName,
-                Address = model.Address,
-                Email = model.Email,
-              
-                PhoneNumber = model.PhoneNumber
-            };
-
-           var result = _db.Registers.Add(registration);
-            _db.SaveChanges();
-            var loginUser = new User()
-            {
-                UserName = model.UserName,
-                Password = hashedPassword,
-                UserId = registration.Id,
-                Salt = retrievedSaltBytes
-            };
-           
-
-            _db.Users.Add(loginUser);
-            _db.SaveChanges();
-            
-
-            return RedirectToAction("Login");
+                catch (Exception) 
+                {
+                    transaction.Rollback();
+                    throw;
+                }
+                }
+            return View();     
         }
         
         public IActionResult Login()
@@ -94,7 +112,18 @@ namespace Login_Test.Controllers
             
             if (verify) 
             {
-               return RedirectToAction("Index");
+                // Store data in session
+                HttpContext.Session.SetString("Username", model.UserName);
+
+                //CookieOptions options = new CookieOptions
+                //{
+                //    Expires = DateTimeOffset.UtcNow.AddSeconds(60),
+                //    Secure = true, // Ensures cookie is only sent over HTTPS
+                //    HttpOnly = true, // Not accessible via JavaScript
+                //};
+                //Response.Cookies.Append("UserTheme", theme, options);
+
+                return RedirectToAction("Index");
             }
 
             //return RedirectToAction("Index");

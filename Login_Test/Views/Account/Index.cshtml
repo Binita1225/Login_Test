@@ -1,1 +1,4 @@
-﻿<h2>This is index</h2>
+﻿@using Microsoft.AspNetCore.Http;
+
+<h2>This is index</h2>
+<h3>Welcome : @Context.Session.GetString("Username")</h3>
