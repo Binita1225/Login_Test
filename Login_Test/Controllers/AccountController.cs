@@ -2,7 +2,10 @@
 using Login_Test.Models;
 using Login_Test.Models.ViewModels;
 using Login_Test.Repository.IRepository;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Data.SqlTypes;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -29,8 +32,28 @@ namespace Login_Test.Controllers
         }
 
         [HttpPost]
-        public IActionResult Register(RegisterVM model) 
+        public IActionResult Register(RegisterVM model)
         {
+            if (ModelState.IsValid)
+            {
+                var existingUser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
+                if (existingUser != null)
+                {
+                    ModelState.AddModelError("Username", "Username is already taken");
+                    return View(model);
+                }
+            }
+
+            string password = model.Password;
+
+            byte[] saltBytes = GenerateSalt();
+            // Hash the password with the salt
+            string hashedPassword = HashPassword(password, saltBytes);
+            string base64Salt = Convert.ToBase64String(saltBytes);
+
+            //string retrievedSaltBytes = base64Salt;
+            byte[] retrievedSaltBytes = Convert.FromBase64String(base64Salt);
+
             var registration = new Register()
             {
                 FirstName = model.FirstName,
@@ -46,13 +69,11 @@ namespace Login_Test.Controllers
             var loginUser = new User()
             {
                 UserName = model.UserName,
-                Password = model.Password,
-                UserId = registration.Id
+                Password = hashedPassword,
+                UserId = registration.Id,
+                Salt = retrievedSaltBytes
             };
-            if (true)
-            {
-
-            }
+           
 
             _db.Users.Add(loginUser);
             _db.SaveChanges();
@@ -67,10 +88,11 @@ namespace Login_Test.Controllers
         }
 
         [HttpPost]
-        public IActionResult Login(RegisterVM model)
+        public IActionResult Login(LoginVM model)
         {
-            var user = _db.Users.FirstOrDefault(u => u.UserName == model.UserName && u.Password == model.Password);
-            if (user != null)
+            var verify = VeriryPassword(model);
+            
+            if (verify) 
             {
                return RedirectToAction("Index");
             }
@@ -79,13 +101,76 @@ namespace Login_Test.Controllers
             return NotFound();
         }
 
-        private string HashPassword(string password)
+        private string HashPassword(string password, byte[] salt)
         {
             using (var sha256 = SHA256.Create())
             {
-                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(bytes);
+                byte[] passwordBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+
+                byte[] saltedPassword = new byte[password.Length + salt.Length];
+
+                // Concatenate password and salt  
+                Buffer.BlockCopy(passwordBytes, 0, saltedPassword, 0, password.Length);
+                Buffer.BlockCopy(salt, 0, saltedPassword, password.Length, salt.Length);
+
+                // Hash the concatenated password and salt
+                byte[] hashedBytes = sha256.ComputeHash(saltedPassword);
+
+                // Concatenate the salt and hashed password for storage
+                byte[] hashedPasswordWithSalt = new byte[hashedBytes.Length + salt.Length];
+                Buffer.BlockCopy(salt, 0, hashedPasswordWithSalt, 0, salt.Length);
+                Buffer.BlockCopy(hashedBytes, 0, hashedPasswordWithSalt, salt.Length, hashedBytes.Length);
+
+                return Convert.ToBase64String(hashedPasswordWithSalt);
             }
         }
+
+        private bool VeriryPassword(LoginVM model)
+        {
+            //byte[] saltBytes = GenerateSalt();
+            //var hashPassword = HashPassword(model.Password, saltBytes);
+
+            // In a real scenario, you would retrieve these values from your database
+            var user = _db.Users.Where(x => x.UserName == model.UserName).Select(x => x).FirstOrDefault();
+
+            string storedHashedPassword = user.Password;// "hashed_password_from_database";
+                                                        //string storedSalt = user.Salt; //"salt_from_database";
+                                                        //string storedSaltBytes = user.Salt;
+            byte[] storedSaltBytes = user.Salt;
+            string enteredPassword = model.Password; //"user_entered_password";
+
+            // Convert the stored salt and entered password to byte arrays
+            // byte[] storedSaltBytes = Convert.FromBase64String(user.Salt);
+            byte[] enteredPasswordBytes = Encoding.UTF8.GetBytes(enteredPassword);
+
+            // Concatenate entered password and stored salt
+            byte[] saltedPassword = new byte[enteredPasswordBytes.Length + storedSaltBytes.Length];
+            Buffer.BlockCopy(enteredPasswordBytes, 0, saltedPassword, 0, enteredPasswordBytes.Length);
+            Buffer.BlockCopy(storedSaltBytes, 0, saltedPassword, enteredPasswordBytes.Length, storedSaltBytes.Length);
+
+            // Hash the concatenated value
+            string enteredPasswordHash = HashPassword(enteredPassword, storedSaltBytes);
+
+            // Compare the entered password hash with the stored hash
+            if (enteredPasswordHash == storedHashedPassword)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        static byte[] GenerateSalt()
+        {
+            using (var rng = new RNGCryptoServiceProvider())
+            {
+                byte[] salt = new byte[16]; // Adjust the size based on your security requirements
+                rng.GetBytes(salt);
+                return salt;
+            }
+        }
+
     }
 }
