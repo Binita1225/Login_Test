@@ -15,19 +15,21 @@ namespace Login_Test.Controllers
     {
         private readonly ApplicationDbContext _db;
 
+        // Constructor to initialize the database context
         public AccountController(ApplicationDbContext db)
         {
             _db = db; 
         }
-       
 
-            public IActionResult Index()
+        //Default action to load the index page
+        public IActionResult Index()
         {
             var username = HttpContext.Session.GetString("Username");
           
             return View();
         }
 
+        // Action to display the registration form
         public IActionResult Register()
         {
             return View();
@@ -37,14 +39,15 @@ namespace Login_Test.Controllers
         public IActionResult Register(RegisterVM model)
         {
 
-
+            // Check if the provided model data is valid
             if (ModelState.IsValid)
             {
+                // Start a database transaction for atomic operations
                 using var transaction = (_db.Database.BeginTransaction());
 
                 try
                 {
-
+                    // Check if the username already exists in the database
                     var existingUser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
                     if (existingUser != null)
                     {
@@ -52,7 +55,7 @@ namespace Login_Test.Controllers
                         return View(model);
                     }
 
-
+                    // Generate a salt and hash the provided password
                     string password = model.Password;
 
                     byte[] saltBytes = GenerateSalt();
@@ -63,6 +66,7 @@ namespace Login_Test.Controllers
                     //string retrievedSaltBytes = base64Salt;
                     byte[] retrievedSaltBytes = Convert.FromBase64String(base64Salt);
 
+                    // Save the registration details
                     var registration = new Register()
                     {
                         FirstName = model.FirstName,
@@ -75,6 +79,8 @@ namespace Login_Test.Controllers
 
                     var result = _db.Registers.Add(registration);
                     _db.SaveChanges();
+
+                    // Save the user login details with hashed password and salt
                     var loginUser = new User()
                     {
                         UserName = model.UserName,
@@ -83,23 +89,26 @@ namespace Login_Test.Controllers
                         Salt = retrievedSaltBytes
                     };
 
-
                     _db.Users.Add(loginUser);
                     _db.SaveChanges();
 
+                    // Commit the transaction if all operations succeed
                     transaction.Commit();
 
+                    // Redirect to the login page after successful registration
                     return RedirectToAction("Login");
                 }
                 catch (Exception) 
                 {
+                    // Rollback the transaction in case of an error
                     transaction.Rollback();
                     throw;
                 }
                 }
             return View();     
         }
-        
+
+        // Action to display the login form
         public IActionResult Login()
         {
             return View();
@@ -108,11 +117,12 @@ namespace Login_Test.Controllers
         [HttpPost]
         public IActionResult Login(LoginVM model)
         {
+            // Verify the user's credentials
             var verify = VeriryPassword(model);
-            
+            //var user 
             if (verify) 
             {
-                // Store data in session
+                // Store data in session ,Store the username in the session for later use
                 HttpContext.Session.SetString("Username", model.UserName);
 
                 //CookieOptions options = new CookieOptions
@@ -123,13 +133,26 @@ namespace Login_Test.Controllers
                 //};
                 //Response.Cookies.Append("UserTheme", theme, options);
 
+                //string? Username = Request.Cookies.ContainsKey(model.UserName) ?
+                //Request.Cookies[model.UserName] : null;
+
+                //string message = $"UserName: {UserName}";
+                //return message;
+
+                // Store the username in cookies 
+                HttpContext.Response.Cookies.Append("Username", model.UserName);
+                // HttpContext.Response.Cookies.Append("Address", model.Address);
+
+                // Redirect to the index page after successful login
                 return RedirectToAction("Index");
             }
 
             //return RedirectToAction("Index");
+            // Return a 404 error if login fails
             return NotFound();
         }
 
+        // Method to hash the password with a salt
         private string HashPassword(string password, byte[] salt)
         {
             using (var sha256 = SHA256.Create())
@@ -154,17 +177,20 @@ namespace Login_Test.Controllers
             }
         }
 
+        // Method to verify the entered password during login
         private bool VeriryPassword(LoginVM model)
         {
             //byte[] saltBytes = GenerateSalt();
             //var hashPassword = HashPassword(model.Password, saltBytes);
 
+            // Retrieve the user from the database using the provided username
             // In a real scenario, you would retrieve these values from your database
             var user = _db.Users.Where(x => x.UserName == model.UserName).Select(x => x).FirstOrDefault();
-
+           
+            // Extract stored hash and salt
             string storedHashedPassword = user.Password;// "hashed_password_from_database";
-                                                        //string storedSalt = user.Salt; //"salt_from_database";
-                                                        //string storedSaltBytes = user.Salt;
+            //string storedSalt = user.Salt; //"salt_from_database";
+           //string storedSaltBytes = user.Salt;
             byte[] storedSaltBytes = user.Salt;
             string enteredPassword = model.Password; //"user_entered_password";
 
@@ -191,6 +217,7 @@ namespace Login_Test.Controllers
             }
         }
 
+        // Method to generate a cryptographically secure salt
         static byte[] GenerateSalt()
         {
             using (var rng = new RNGCryptoServiceProvider())
