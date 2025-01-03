@@ -119,9 +119,24 @@ namespace Login_Test.Controllers
         {
             // Verify the user's credentials
             var verify = VeriryPassword(model);
-            //var user 
+    //        var usersdatalist = _db.Users.ToList();
+            
+
+            //var user = (from userDetail in _db.Users
+            //            join register in _db.Registers
+            //            on userDetail.UserId equals register.Id
+            //            where userDetail.UserName == model.UserName
+            //            select new LoginVM
+            //            {
+            //                UserName = userDetail.UserName,
+            //                Password = model.Password,
+            //                Address = register.Address
+            //            }).FirstOrDefault();
             if (verify) 
             {
+                var searcheduser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
+
+                var register = _db.Registers.FirstOrDefault(r => r.Id == searcheduser.UserId);
                 // Store data in session ,Store the username in the session for later use
                 HttpContext.Session.SetString("Username", model.UserName);
 
@@ -141,7 +156,7 @@ namespace Login_Test.Controllers
 
                 // Store the username in cookies 
                 HttpContext.Response.Cookies.Append("Username", model.UserName);
-                // HttpContext.Response.Cookies.Append("Address", model.Address);
+                HttpContext.Response.Cookies.Append("Address", register.Address);
 
                 // Redirect to the index page after successful login
                 return RedirectToAction("Index");
