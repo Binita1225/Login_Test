@@ -1,4 +1,5 @@
-﻿using Login_Test.Data;
+﻿using Login_Test.Common;
+using Login_Test.Data;
 using Login_Test.Models;
 using Login_Test.Models.ViewModels;
 using Login_Test.Repository.IRepository;
@@ -132,7 +133,7 @@ namespace Login_Test.Controllers
             //                Password = model.Password,
             //                Address = register.Address
             //            }).FirstOrDefault();
-            if (verify) 
+            if (verify.Status) 
             {
                 var searcheduser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
 
@@ -157,14 +158,29 @@ namespace Login_Test.Controllers
                 // Store the username in cookies 
                 HttpContext.Response.Cookies.Append("Username", model.UserName);
                 HttpContext.Response.Cookies.Append("Address", register.Address);
+                //HttpContext.Response.Cookies.Append("Message", S);
+
+
+                //return new ServiceResult<List<LoginVM>>()
+                //{
+                //    Data = "Success",
+                //    Message = "",
+                //    Status = ResultStatus.Success
+                //};
+
+                TempData["success"] = verify.Message;
 
                 // Redirect to the index page after successful login
                 return RedirectToAction("Index");
             }
+            else
+            {
+                TempData["error"] = verify.Message;
+            }
 
             //return RedirectToAction("Index");
             // Return a 404 error if login fails
-            return NotFound();
+            return View(model);
         }
 
         // Method to hash the password with a salt
@@ -193,7 +209,7 @@ namespace Login_Test.Controllers
         }
 
         // Method to verify the entered password during login
-        private bool VeriryPassword(LoginVM model)
+        private ServiceResult VeriryPassword(LoginVM model)
         {
             //byte[] saltBytes = GenerateSalt();
             //var hashPassword = HashPassword(model.Password, saltBytes);
@@ -224,11 +240,20 @@ namespace Login_Test.Controllers
             // Compare the entered password hash with the stored hash
             if (enteredPasswordHash == storedHashedPassword)
             {
-                return true;
+                return new ServiceResult
+                {
+                    Message = "Successfully login",
+                    Status = true
+
+                };
             }
             else
             {
-                return false;
+                return new ServiceResult
+                {
+                    Message = "Verify your password",
+                    Status = false
+                };
             }
         }
 

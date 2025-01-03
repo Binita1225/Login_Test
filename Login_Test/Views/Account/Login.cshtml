@@ -10,4 +10,8 @@
         <input type="password" asp-for="Password" class="form-control" />
     </div> <br />
     <button type="submit">Login</button>
+
+    <div>
+        @TempData["error"]
+    </div>
 </form>
