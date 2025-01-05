@@ -11,7 +11,15 @@ namespace Login_Test.Data
         }
 
         public DbSet<Register> Registers { get; set; }
-        public DbSet<User> Users { get; set; }        
+        public DbSet<User> Users { get; set; }
+
+        //protected override void OnModelCreating(ModelBuilder modelBuilder)
+        //{
+        //    base.OnModelCreating(modelBuilder);
+        //    modelBuilder.Entity<Register>().HasData(
+        //        new 
+        //        );
+        //}
 
     }
 }

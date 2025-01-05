@@ -5,6 +5,7 @@ using Login_Test.Models.ViewModels;
 using Login_Test.Repository.IRepository;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using System.Data.SqlTypes;
 using System.Security.Cryptography;
@@ -12,6 +13,7 @@ using System.Text;
 
 namespace Login_Test.Controllers
 {
+    
     public class AccountController : Controller
     {
         private readonly ApplicationDbContext _db;
@@ -33,7 +35,12 @@ namespace Login_Test.Controllers
         // Action to display the registration form
         public IActionResult Register()
         {
-            return View();
+            //added list of roles for dropdown
+            var registerVM = new RegisterVM()
+            {
+                AvailableRoles = new List<string> { "User", "Admin" }
+            };
+            return View(registerVM);
         }
 
         [HttpPost]
@@ -46,13 +53,25 @@ namespace Login_Test.Controllers
                 // Start a database transaction for atomic operations
                 using var transaction = (_db.Database.BeginTransaction());
 
+               
+
                 try
                 {
+                    //validate role selection
+                    if (string.IsNullOrWhiteSpace(model.Role) || !new List<string> { "User", "Admin"}.Contains(model.Role))
+                    {
+                        ModelState.AddModelError("Role", "Invalid role");
+                        //re-populate availableroles before returning to view
+                        model.AvailableRoles = new List<string> { "User", "Admin" };
+                        return View(model);
+                    }
+
                     // Check if the username already exists in the database
                     var existingUser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
                     if (existingUser != null)
                     {
                         ModelState.AddModelError("Username", "Username is already taken");
+                        model.AvailableRoles = new List<string> { "User", "Admin" };
                         return View(model);
                     }
 
@@ -87,7 +106,8 @@ namespace Login_Test.Controllers
                         UserName = model.UserName,
                         Password = hashedPassword,
                         UserId = registration.Id,
-                        Salt = retrievedSaltBytes
+                        Salt = retrievedSaltBytes,
+                        Role = model.Role
                     };
 
                     _db.Users.Add(loginUser);
@@ -106,7 +126,9 @@ namespace Login_Test.Controllers
                     throw;
                 }
                 }
-            return View();     
+
+            model.AvailableRoles = new List<string> { "User", "Admin"};
+            return View(model);     
         }
 
         // Action to display the login form
@@ -114,7 +136,7 @@ namespace Login_Test.Controllers
         {
             return View();
         }
-
+        
         [HttpPost]
         public IActionResult Login(LoginVM model)
         {
@@ -138,40 +160,58 @@ namespace Login_Test.Controllers
                 var searcheduser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
 
                 var register = _db.Registers.FirstOrDefault(r => r.Id == searcheduser.UserId);
-                // Store data in session ,Store the username in the session for later use
-                HttpContext.Session.SetString("Username", model.UserName);
 
-                //CookieOptions options = new CookieOptions
-                //{
-                //    Expires = DateTimeOffset.UtcNow.AddSeconds(60),
-                //    Secure = true, // Ensures cookie is only sent over HTTPS
-                //    HttpOnly = true, // Not accessible via JavaScript
-                //};
-                //Response.Cookies.Append("UserTheme", theme, options);
+                if (searcheduser != null)
+                {
+                    var userRole = searcheduser.Role;
 
-                //string? Username = Request.Cookies.ContainsKey(model.UserName) ?
-                //Request.Cookies[model.UserName] : null;
-
-                //string message = $"UserName: {UserName}";
-                //return message;
-
-                // Store the username in cookies 
-                HttpContext.Response.Cookies.Append("Username", model.UserName);
-                HttpContext.Response.Cookies.Append("Address", register.Address);
-                //HttpContext.Response.Cookies.Append("Message", S);
+                    // Store data in session ,Store the username in the session for later use with role
+                    HttpContext.Session.SetString("Username", model.UserName);
+                    HttpContext.Session.SetString("Role", userRole);
 
 
-                //return new ServiceResult<List<LoginVM>>()
-                //{
-                //    Data = "Success",
-                //    Message = "",
-                //    Status = ResultStatus.Success
-                //};
 
-                TempData["success"] = verify.Message;
 
-                // Redirect to the index page after successful login
-                return RedirectToAction("Index");
+                    //CookieOptions options = new CookieOptions
+                    //{
+                    //    Expires = DateTimeOffset.UtcNow.AddSeconds(60),
+                    //    Secure = true, // Ensures cookie is only sent over HTTPS
+                    //    HttpOnly = true, // Not accessible via JavaScript
+                    //};
+                    //Response.Cookies.Append("UserTheme", theme, options);
+
+                    //string? Username = Request.Cookies.ContainsKey(model.UserName) ?
+                    //Request.Cookies[model.UserName] : null;
+
+                    //string message = $"UserName: {UserName}";
+                    //return message;
+
+                    // Store the username in cookies 
+                    HttpContext.Response.Cookies.Append("Username", model.UserName);
+                    HttpContext.Response.Cookies.Append("Address", register.Address);
+                    //HttpContext.Response.Cookies.Append("Message", S);
+
+                    if (userRole == "Admin")
+                    {
+                        return RedirectToAction("AdminDashboard", "Admin");
+                    }
+                    else if (userRole == "User")
+                    {
+                        return RedirectToAction("UserDashboard", "User");
+                    }
+
+                    //return new ServiceResult<List<LoginVM>>()
+                    //{
+                    //    Data = "Success",
+                    //    Message = "",
+                    //    Status = ResultStatus.Success
+                    //};
+
+                    TempData["success"] = verify.Message;
+
+                    // Redirect to the index page after successful login
+                   // return RedirectToAction("Index");
+                }
             }
             else
             {
@@ -182,6 +222,8 @@ namespace Login_Test.Controllers
             // Return a 404 error if login fails
             return View(model);
         }
+
+       
 
         // Method to hash the password with a salt
         private string HashPassword(string password, byte[] salt)
@@ -267,6 +309,9 @@ namespace Login_Test.Controllers
                 return salt;
             }
         }
+
+       
+        
 
     }
 }

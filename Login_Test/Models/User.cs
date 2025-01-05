@@ -14,5 +14,6 @@ namespace Login_Test.Models
         public int UserId { get; set; }
         public byte[] Salt { get; set; }
 
+        public string Role {  get; set; }
     }
 }

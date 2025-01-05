@@ -1,0 +1,10 @@
+﻿<h2>This is admin dashboard</h2>
+
+<h3>Welcome : @Context.Session.GetString("Username")</h3>
+<h4>Hello! : @Context.Request.Cookies["Username"]</h4>
+<h4>Address : @Context.Request.Cookies["Address"]</h4>
+<h3>Role : @Context.Session.GetString("Role")</h3>
+
+<div class="alert alert-success">
+    @TempData["success"]
+</div>

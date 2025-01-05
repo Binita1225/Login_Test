@@ -19,5 +19,7 @@ namespace Login_Test.Models
         [Required]
         [RegularExpression(@"^\d{10}$", ErrorMessage = "Phone number must be exactly 10 digits")]
         public int PhoneNumber { get; set; }
+
+        
     }
 }
