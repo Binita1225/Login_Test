@@ -3,6 +3,7 @@ using Login_Test.Repository.IRepository;
 using Login_Test.Repository;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddSession(options =>
 {
+    options.Cookie.Name = "MyCoookie";
     options.IdleTimeout = TimeSpan.FromMinutes(20);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
@@ -23,9 +25,19 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     {
         options.LoginPath = "/Account/Login";
         options.AccessDeniedPath = "/Account/AccessDenied";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+        options.Cookie.MaxAge = options.ExpireTimeSpan;
+
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(option => {
+
+    option.AddPolicy("Admin", policy => policy.RequireRole("Admin", "User"));
+    option.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+
+});
+
+    
 
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
@@ -47,11 +59,12 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseAuthorization();
 app.UseAuthentication();
+
+app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=Account}/{action=Login}/{id?}");
 
 app.Run();

@@ -3,17 +3,21 @@ using Login_Test.Data;
 using Login_Test.Models;
 using Login_Test.Models.ViewModels;
 using Login_Test.Repository.IRepository;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using System.Data.SqlTypes;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Login_Test.Controllers
 {
-    
+
     public class AccountController : Controller
     {
         private readonly ApplicationDbContext _db;
@@ -21,14 +25,14 @@ namespace Login_Test.Controllers
         // Constructor to initialize the database context
         public AccountController(ApplicationDbContext db)
         {
-            _db = db; 
+            _db = db;
         }
 
         //Default action to load the index page
         public IActionResult Index()
         {
             var username = HttpContext.Session.GetString("Username");
-          
+
             return View();
         }
 
@@ -53,12 +57,12 @@ namespace Login_Test.Controllers
                 // Start a database transaction for atomic operations
                 using var transaction = (_db.Database.BeginTransaction());
 
-               
+
 
                 try
                 {
                     //validate role selection
-                    if (string.IsNullOrWhiteSpace(model.Role) || !new List<string> { "User", "Admin"}.Contains(model.Role))
+                    if (string.IsNullOrWhiteSpace(model.Role) || !new List<string> { "User", "Admin" }.Contains(model.Role))
                     {
                         ModelState.AddModelError("Role", "Invalid role");
                         //re-populate availableroles before returning to view
@@ -119,24 +123,25 @@ namespace Login_Test.Controllers
                     // Redirect to the login page after successful registration
                     return RedirectToAction("Login");
                 }
-                catch (Exception) 
+                catch (Exception)
                 {
                     // Rollback the transaction in case of an error
                     transaction.Rollback();
                     throw;
                 }
-                }
+            }
 
-            model.AvailableRoles = new List<string> { "User", "Admin"};
-            return View(model);     
+            model.AvailableRoles = new List<string> { "User", "Admin" };
+            return View(model);
         }
 
+        [AllowAnonymous]
         // Action to display the login form
         public IActionResult Login()
         {
             return View();
         }
-        
+        [AllowAnonymous]
         [HttpPost]
         public IActionResult Login(LoginVM model)
         {
@@ -159,11 +164,14 @@ namespace Login_Test.Controllers
             {
                 var searcheduser = _db.Users.FirstOrDefault(u => u.UserName == model.UserName);
 
-                var register = _db.Registers.FirstOrDefault(r => r.Id == searcheduser.UserId);
+                //var register = _db.Registers.FirstOrDefault(r => r.Id == searcheduser.UserId);
+                //var verifyResult = VeriryPassword(model);
 
-                if (searcheduser != null)
+                if (searcheduser != null && verify.Status)
                 {
                     var userRole = searcheduser.Role;
+
+                    var register = _db.Registers.FirstOrDefault(r => r.Id == searcheduser.UserId);
 
                     // Store data in session ,Store the username in the session for later use with role
                     HttpContext.Session.SetString("Username", model.UserName);
@@ -187,9 +195,23 @@ namespace Login_Test.Controllers
                     //return message;
 
                     // Store the username in cookies 
-                    HttpContext.Response.Cookies.Append("Username", model.UserName);
-                    HttpContext.Response.Cookies.Append("Address", register.Address);
+                    //HttpContext.Response.Cookies.Append("Username", model.UserName);
+                    //HttpContext.Response.Cookies.Append("Address", register.Address);
                     //HttpContext.Response.Cookies.Append("Message", S);
+
+                    //create user claims
+                    var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.Name, searcheduser.UserName),
+                        new Claim(ClaimTypes.Role, userRole)
+                    };
+
+                    //created identity & principal
+                    var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                    var principal = new ClaimsPrincipal(identity);
+
+                    //sign in user with claims
+                    HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
                     if (userRole == "Admin")
                     {
@@ -251,42 +273,85 @@ namespace Login_Test.Controllers
         }
 
         // Method to verify the entered password during login
+        //private ServiceResult VeriryPassword(LoginVM model)
+        //{
+        //    //byte[] saltBytes = GenerateSalt();
+        //    //var hashPassword = HashPassword(model.Password, saltBytes);
+
+        //    // Retrieve the user from the database using the provided username
+        //    // In a real scenario, you would retrieve these values from your database
+        //    var user = _db.Users.Where(x => x.UserName == model.UserName).Select(x => x).FirstOrDefault();
+
+        //    // Extract stored hash and salt
+        //    string storedHashedPassword = user.Password;// "hashed_password_from_database";
+        //    //string storedSalt = user.Salt; //"salt_from_database";
+        //   //string storedSaltBytes = user.Salt;
+        //    byte[] storedSaltBytes = user.Salt;
+        //    string enteredPassword = model.Password; //"user_entered_password";
+
+        //    // Convert the stored salt and entered password to byte arrays
+        //    // byte[] storedSaltBytes = Convert.FromBase64String(user.Salt);
+        //    byte[] enteredPasswordBytes = Encoding.UTF8.GetBytes(enteredPassword);
+
+        //    // Concatenate entered password and stored salt
+        //    byte[] saltedPassword = new byte[enteredPasswordBytes.Length + storedSaltBytes.Length];
+        //    Buffer.BlockCopy(enteredPasswordBytes, 0, saltedPassword, 0, enteredPasswordBytes.Length);
+        //    Buffer.BlockCopy(storedSaltBytes, 0, saltedPassword, enteredPasswordBytes.Length, storedSaltBytes.Length);
+
+        //    // Hash the concatenated value
+        //    string enteredPasswordHash = HashPassword(enteredPassword, storedSaltBytes);
+
+        //    // Compare the entered password hash with the stored hash
+        //    if (enteredPasswordHash == storedHashedPassword)
+        //    {
+        //        return new ServiceResult
+        //        {
+        //            Message = "Successfully login",
+        //            Status = true
+
+        //        };
+        //    }
+        //    else
+        //    {
+        //        return new ServiceResult
+        //        {
+        //            Message = "Verify your password",
+        //            Status = false
+        //        };
+        //    }
+        //}
+
+
+        // Method to generate a cryptographically secure salt
+
+
         private ServiceResult VeriryPassword(LoginVM model)
         {
-            //byte[] saltBytes = GenerateSalt();
-            //var hashPassword = HashPassword(model.Password, saltBytes);
+            var user = _db.Users.Where(x => x.UserName == model.UserName).FirstOrDefault();
 
-            // Retrieve the user from the database using the provided username
-            // In a real scenario, you would retrieve these values from your database
-            var user = _db.Users.Where(x => x.UserName == model.UserName).Select(x => x).FirstOrDefault();
-           
-            // Extract stored hash and salt
-            string storedHashedPassword = user.Password;// "hashed_password_from_database";
-            //string storedSalt = user.Salt; //"salt_from_database";
-           //string storedSaltBytes = user.Salt;
+            if (user == null)
+            {
+                return new ServiceResult
+                {
+                    Message = "User not found",
+                    Status = false
+                };
+            }
+
+            // Retrieve stored hashed password and salt from the database
+            string storedHashedPassword = user.Password;
             byte[] storedSaltBytes = user.Salt;
-            string enteredPassword = model.Password; //"user_entered_password";
 
-            // Convert the stored salt and entered password to byte arrays
-            // byte[] storedSaltBytes = Convert.FromBase64String(user.Salt);
-            byte[] enteredPasswordBytes = Encoding.UTF8.GetBytes(enteredPassword);
-
-            // Concatenate entered password and stored salt
-            byte[] saltedPassword = new byte[enteredPasswordBytes.Length + storedSaltBytes.Length];
-            Buffer.BlockCopy(enteredPasswordBytes, 0, saltedPassword, 0, enteredPasswordBytes.Length);
-            Buffer.BlockCopy(storedSaltBytes, 0, saltedPassword, enteredPasswordBytes.Length, storedSaltBytes.Length);
-
-            // Hash the concatenated value
-            string enteredPasswordHash = HashPassword(enteredPassword, storedSaltBytes);
+            // Hash the entered password with the stored salt
+            string enteredPasswordHash = HashPassword(model.Password, storedSaltBytes);
 
             // Compare the entered password hash with the stored hash
             if (enteredPasswordHash == storedHashedPassword)
             {
                 return new ServiceResult
                 {
-                    Message = "Successfully login",
+                    Message = "Successfully logged in",
                     Status = true
-
                 };
             }
             else
@@ -299,7 +364,6 @@ namespace Login_Test.Controllers
             }
         }
 
-        // Method to generate a cryptographically secure salt
         static byte[] GenerateSalt()
         {
             using (var rng = new RNGCryptoServiceProvider())
@@ -309,9 +373,21 @@ namespace Login_Test.Controllers
                 return salt;
             }
         }
-
-       
+ 
         
+        public IActionResult Logout()
+        {
+            if (User.Identity.IsAuthenticated)
+            {
+                HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).Wait();
+            }
+            return RedirectToAction("Index");
+        }
+
+        public IActionResult AccessDenied()
+        {
+            return View();
+        }
 
     }
 }
