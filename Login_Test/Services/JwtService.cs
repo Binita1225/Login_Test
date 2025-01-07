@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Login_Test.Services
 {
@@ -15,10 +16,12 @@ namespace Login_Test.Services
     public class JwtService : IJwtService
     {
         private readonly IConfiguration _configuration;
+        private readonly ILogger<JwtService> _logger;
 
-        public JwtService(IConfiguration configuration)
+        public JwtService(IConfiguration configuration, ILogger<JwtService> logger)
         {
             _configuration = configuration;
+            _logger = logger;
         }
 
         private string Key => _configuration["JwtSettings:Key"];
@@ -27,7 +30,7 @@ namespace Login_Test.Services
 
         public string GenerateToken(string username, string role)
         {
-            var claims = new[]
+            var claims = new[] 
             {
                 new Claim(ClaimTypes.Name, username),
                 new Claim(ClaimTypes.Role, role)
@@ -45,8 +48,12 @@ namespace Login_Test.Services
                 expires: expiration,
                 signingCredentials: credentials
             );
+
             var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-            Console.WriteLine($"Generated JWT Token: {tokenString}"); // Add this line for logging
+
+            // Log the generated token (remove this in production)
+            _logger.LogInformation($"Generated JWT Token: {tokenString}");
+
             return tokenString;
         }
 
@@ -64,15 +71,20 @@ namespace Login_Test.Services
                     ValidIssuer = Issuer,
                     ValidAudience = Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ClockSkew = TimeSpan.Zero
+                    ClockSkew = TimeSpan.Zero  // Remove the default 5-minute tolerance
                 };
 
                 var principal = tokenHandler.ValidateToken(token, parameters, out var validatedToken);
+
+                // Log successful validation (for debugging)
+                _logger.LogInformation("Token successfully validated.");
+
                 return principal;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Token validation failed: {ex.Message}");
+                // Log the exception and return null if validation fails
+                _logger.LogError($"Token validation failed: {ex.Message}");
                 return null;
             }
         }

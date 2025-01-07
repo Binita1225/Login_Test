@@ -10,36 +10,62 @@ namespace Login_Test.Controllers
     public class UserController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly ILogger<JwtService> _logger;
 
-        public UserController(IConfiguration configuration)
+        public UserController(IConfiguration configuration, ILogger<JwtService> logger)
         {
             _configuration = configuration;
+            _logger = logger;
         }
 
-        [Authorize(Roles ="User")]
-        public IActionResult UserDashboard()
+     
+        public async Task<IActionResult> UserDashboard()
         {
-            var token = Request.Cookies["AuthToken"];
-            if (string.IsNullOrEmpty(token))
+
+            var jwt = Request.Cookies["AuthToken"];
+
+            if (string.IsNullOrEmpty(jwt))
             {
-                return Unauthorized("No token found");
+                return Unauthorized("Token not found");
             }
 
-            var jwtService = new JwtService(_configuration);
-            var principal = jwtService.ValidateToken(token);
+            using (var httpClient = new HttpClient()) {
 
-            if (principal == null)
-            {
-                return Unauthorized("Invalid token");
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+
+                try
+                {
+                    var response = await httpClient.GetAsync("https://localhost:7035/UserApi/GetData");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var data = await response.Content.ReadAsStringAsync();
+
+                        return View();
+                    }
+                    else
+                    {
+                        return RedirectToAction("Login", "Account");
+                    }
+                }
+                catch (Exception ex) {
+
+                    return Unauthorized($"Error: {ex.Message}");
+                }
+
             }
 
-            var username = principal.Identity?.Name;
-            var role = principal.FindFirst(ClaimTypes.Role)?.Value;
+        }
+    }
 
-            ViewData["Username"] = username;
-            ViewData["Role"] = role;
 
-            return View();
+    [Route("UserApi")]
+    [Authorize(Roles = "User")]
+    public class UserApiController : ControllerBase
+    {
+        [HttpGet("GetData")]
+        public List<int> GetData()
+        {
+            return new List<int> { 1, 2, 3 };
         }
     }
 }

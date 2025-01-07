@@ -1,41 +1,70 @@
 ﻿using Login_Test.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
+using System.Net.Http.Headers;
 
 namespace Login_Test.Controllers
 {
     public class AdminController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly ILogger<JwtService> _logger;
 
-        public AdminController(IConfiguration configuration)
+        // Inject ILogger<JwtService> along with IConfiguration
+        public AdminController(IConfiguration configuration, ILogger<JwtService> logger)
         {
             _configuration = configuration;
+            _logger = logger;
         }
-        //[AllowAnonymous]
-        [Authorize(Roles = "Admin")]
-        [HttpGet]
-        public IActionResult AdminDashboard()
+
+
+        public async Task<IActionResult> AdminDashboard()
         {
-            var token = Request.Cookies["AuthToken"];
-            if (string.IsNullOrEmpty(token))
+            var jwt = Request.Cookies["AuthToken"];
+
+            if (string.IsNullOrEmpty(jwt))
             {
                 return Unauthorized("No token found");
             }
 
-            var jwtService = new JwtService(_configuration);
-            var principal = jwtService.ValidateToken(token);
-
-            if (principal == null)
+            using (var httpClient = new HttpClient())
             {
-                return Unauthorized("Invalid token");
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+
+                try
+                {
+                    var response = await httpClient.GetAsync("https://localhost:7035/AdminApi/GetData");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var data = await response.Content.ReadAsStringAsync();
+
+                        return View();
+                    }
+                    else
+                    {
+
+                        return RedirectToAction("Login", "Account");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return Unauthorized($"Error during API call: {ex.Message}");
+                }
             }
+        }
 
-            ViewData["Username"] = principal.Identity?.Name;
+    }
 
-            return View();
+
+    [Route("AdminApi")]
+    [Authorize(Roles ="User")]
+    public class AdminApiController : ControllerBase
+    {
+        [HttpGet("GetData")]
+        public List<int> GetData()
+        {
+            return new List<int> { 1, 2, 3 };
         }
     }
+
 }

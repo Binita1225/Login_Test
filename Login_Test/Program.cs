@@ -1,6 +1,5 @@
 using Login_Test.Data;
 using Login_Test.Services;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -12,11 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add session support
-builder.Services.AddDistributedMemoryCache();  // Optional, for caching session data
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromMinutes(30);  // Set session timeout
+    options.IdleTimeout = TimeSpan.FromMinutes(20);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
 });
@@ -46,7 +43,7 @@ builder.Services.AddAuthentication(options =>
 
 var app = builder.Build();
 
-app.UseSession();  // Add session middleware
+app.UseSession();
 
 app.UseAuthentication();
 app.UseAuthorization();
