@@ -6,6 +6,8 @@
 <h4>Address : @Context.Request.Cookies["Address"]</h4>
 <h3>Role : @Context.Session.GetString("Role")</h3> *@
 
+<p> Username: @ViewData["Username"]</p>
+<p> Role: @ViewData["Role"]</p>
 <div class="alert alert-success">
     @TempData["success"]
 </div>
